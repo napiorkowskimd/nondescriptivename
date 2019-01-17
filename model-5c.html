@@ -1,0 +1,293 @@
+<html>
+    <meta charset="UTF-8">
+    <script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+    <style>
+        .video {
+            width: calc(1920px / 3);
+            height: calc(1080px / 3);
+            box-sizing: content-box;
+            border: solid 1px black;
+            position: relative;
+        }
+        .cue {
+            position: absolute;
+            box-sizing: border-box;
+            border: solid 1px blue;
+            font-size: calc(62px / 3);
+            padding: 0 calc(10px / 3);
+            color: rgb(48, 48, 48);
+        }
+        .cue.inactive {
+            opacity: 0.3;
+        }
+        .cue.error {
+            border-color: rgba(255, 0, 0);
+            color: rgba(96, 0, 0);
+        }
+        .cue.moving {
+            border-color: rgba(0, 128, 0);
+            color: rgba(0, 96, 0);
+        }
+        .step-active {
+            font-weight: bold;
+        }
+        #content {
+            position:relative;
+        }
+        #log {
+            height: 10em;
+            overflow: auto;
+        }
+        #counter {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 33px;
+            font-weight: bold;
+            color: black;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 2px;
+            -webkit-text-stroke-color: rgba(0,0,0,.1);
+        }
+        h1 {
+            font-size: 33px;
+            color: black;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 1px;
+            -webkit-text-stroke-color: rgba(0,0,0,.7);
+        }
+    </style>
+    <h1>"Force" diagram of the bounces and re-bounces</h1>
+    <button id="play-pause" onclick="play_pause()">pause</button>
+    <div id='content'>
+    <div class="video">
+    </div>
+    <div id="counter"></div>
+    </div>
+    <pre id="log">
+    </pre>
+    <script>
+        const line_height = .0524 // .0824
+        const line_top = 0.9335
+
+        const height = 99
+        const left = 411.453
+        const scale = 3
+        const delay = 500
+        const video_height = 1080
+
+        const data0 = [
+            "Małe Wu Wu wlazło na palmę -",
+            "Wrażenie kolosalne!",
+            "I zaczęło jeść daktyle,",
+            "A za chwilę rzeką Nilem",
+            "Podpłynęły krokodyle:",
+            "- Wu Wu znikaj stąd i tyle!",
+            "Check",
+            "One",
+            "Two",
+            ".Check",
+            ".One",
+            ".Two",
+            "Impossible.",
+            "No one can get",
+            // "throught the Great Wall."
+        ]
+
+        // let data = data0.map((text, ndx) => {
+        //     let line = data0.length - ndx - 1
+        //     line = (line_top - line * line_height) * video_height
+        //     return { top: line, orig: line, text: text, width : 1066 }
+        // })
+
+        let data = data0.map((text, ndx) => {
+            let line = data0.length - ndx - 1
+            line = (line_top - line * line_height) * video_height
+            return { top: 500+30*ndx, orig: line, text: text, width : 1066 }
+        })
+        data[0].top = 150
+        data[1].top = 170
+        data.splice(7, 4) // first index, number of deleted
+        // data.splice(6, 3)
+
+        let delta = (data[1].top - data[0].top)*100/video_height
+        console.log(delta)
+
+        let within = (low, high, test) => (low <= test && high >= test)
+        let overlap = (id1, id2) => {
+            const top1 = data[id1].top
+            const top2 = data[id2].top
+
+            const bottom1 = top1 + height
+            const bottom2 = top2 + height
+
+            return within(top1, bottom1, top2) || within(top1, bottom1, bottom2)
+        }
+
+        let moved = 0
+        let iter = 0
+
+        let move_by = (id, delta) => {
+            if (!delta)
+                return;
+
+            data[id].top += delta
+            show_cue($(data[id].id))
+            console.log(`${data[id].id} moved by ${delta}`)
+
+            if (delta < 0) {
+                // moving up
+                const lowest = data[id].top - height
+                for (let i = 0; i < id; ++i) {
+                    if (lowest >= data[i].top)
+                        continue
+
+                    move_by(i, lowest - data[i].top)
+                }
+                return
+            }
+
+            const highest = data[id].top + height;
+            for (let i = id + 1; i < data.length; ++i) {
+                if (highest <= data[i].top)
+                    continue
+
+                move_by(i, highest - data[i].top)
+            }
+        }
+
+        let move = ndx => {
+            ndx = ndx || 0
+            ++iter
+            console.log("Iter: ", iter, " ===================================================")
+            $("#counter").text(iter)
+
+            if (ndx == data.length) {
+                console.log('Done!')
+                pull_back(0)
+                return;
+            }
+
+            for (let j = ndx + 1; j < data.length; ++j) {
+                if (!overlap(ndx, j))
+                    continue;
+
+                const top = data[ndx].top + height
+                const delta = top - data[j].top
+                if (!delta)
+                    continue
+
+                console.log('#box' + (ndx+1) + ' -> #box' + (j+1) + ', ' + delta)
+                move_by(j, delta)
+            }
+
+            setTimeout(move.bind(null, ndx + 1), delay)
+        }
+
+        let rebounce = (id, dir) => {
+            let from = dir < 0 ? 0 : id + 1
+            let to = dir < 0 ? id : data.length
+
+            for (let i = from; i < to; ++i) {
+                if (!overlap(i, id))
+                    continue;
+                const orig = data[i].top
+                if (dir > 0)
+                    data[i].top = data[id].top + height
+                else
+                    data[i].top = data[id].top - height
+
+                const force = data[i].top - orig
+
+                if (!force || (force * dir) < 0)
+                    continue
+
+                $dst = $(data[i].id)
+                $dst.addClass('moving')
+                show_cue($dst)
+                console.log('#box' + (i+1) + ' bounced off of #box' + (id+1) + ', ' + force)
+                rebounce(i, force)
+            }
+        }
+
+        let pull_back = ndx => {
+            $(".moving").removeClass("moving")
+            if (ndx == data.length) {
+                setTimeout(cast_out, 2*delay)
+                return;
+            }
+            let self = data[ndx]
+            let top = self.top
+            if (top < 0)
+                top = 0
+            if (top + height > video_height)
+                top = video_height - height
+            if (top != self.top) {
+                ++iter
+                console.log("Iter: ", iter, " ===================================================")
+                $("#counter").text(iter)
+                $(self.id).addClass("moving")
+
+                const delta = top - self.top
+                console.log(self.id + " pulled into view, " + delta)
+
+                move_by(ndx, delta)
+                setTimeout(pull_back.bind(null, ndx + 1), delay)
+            }
+            else
+                pull_back(ndx + 1)
+        }
+
+        let cast_out = () => {
+            ++iter
+            console.log("Iter: ", iter, " ===================================================")
+            for (let i = 0; i < data.length; ++i) {
+                let self = data[i]
+                let top = self.top
+                if (top < 0)
+                    top = 0
+                if (top + height > video_height)
+                    top = video_height - height
+                if (top != self.top) {
+                    let $self = $(self.id)
+                    // self.top = self.orig
+                    show_cue($self)
+                    $self.addClass("error inactive")
+                    console.log(`${self.id} still conflicting. removing/leaving`)
+                }
+            }
+            console.log('Pulled!')
+        }
+
+        show_cue_ex = ($cue, left, top, width, height) => {
+            $cue.css("left", (left / scale) + "px")
+            $cue.css("top", (top / scale) + "px")
+            $cue.css("width", (width / scale) + "px")
+            $cue.css("height", (height / scale) + "px")
+        }
+
+        show_cue = ($cue) => {
+            let block = data[$cue.attr("data-id")]
+            show_cue_ex($cue, left, block.top, block.width, height)
+        }
+
+        window.onload=() => {
+            let id = 0
+            let $video = $(".video")
+            data.map(block => {
+                let $cue = $("<div class='cue'>")
+                $cue.attr("data-id", id)
+                id += 1
+                block['id'] = "#box" + id
+                $cue.attr("id", "box" + id)
+                $cue.text(block.text)
+                $video.append($cue)
+                show_cue($(block.id))
+            })
+            setTimeout(move, delay)
+        }
+    </script>
+</html>

@@ -1,0 +1,266 @@
+<html>
+    <script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+    <style>
+        .video {
+            width: calc(1920px / 3);
+            height: calc(1080px / 3);
+            box-sizing: content-box;
+            border: solid 1px black;
+            position: relative;
+        }
+        .cue {
+            position: absolute;
+            box-sizing: border-box;
+            border: solid 1px blue;
+            font-size: calc(62px / 3);
+            padding: 0 calc(10px / 3);
+            color: rgb(48, 48, 48);
+        }
+        .cue.inactive {
+            border-color: rgba(0, 0, 255, 0.3);
+            color: rgba(48, 48, 48, 0.3);
+        }
+        .cue.error {
+            border-color: rgba(255, 0, 0);
+            color: rgba(96, 0, 0);
+        }
+        .cue.moving {
+            border-color: rgba(0, 128, 0);
+            color: rgba(0, 96, 0);
+        }
+        .step-active {
+            font-weight: bold;
+        }
+        #content {
+            position:relative;
+        }
+        #log {
+            height: 10em;
+            overflow: auto;
+        }
+        #counter {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 33px;
+            font-weight: bold;
+            color: black;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 2px;
+            -webkit-text-stroke-color: rgba(0,0,0,.1);
+        }
+        h1 {
+            font-size: 33px;
+            color: black;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 1px;
+            -webkit-text-stroke-color: rgba(0,0,0,.7);
+        }
+    </style>
+    <h1>"Force" diagram of the bounces and re-bounces</h1>
+    <div id='content'>
+    <div class="video">
+    </div>
+    <div id="counter"></div>
+    </div>
+    <pre id="log">
+    </pre>
+    <script>
+
+        function delay(ms) {
+          return new Promise(function(resolve, reject) {
+            setTimeout(resolve, ms)
+          });
+        }
+        var stepRes = null;
+        function waitForStep() {
+          return new Promise(function(resolve, reject) {
+            stepRes = resolve
+          });
+        }
+
+        function step() {
+          stepRes()
+        }
+
+        const line_height = .0824
+        const line_top = 0.9335
+
+        const height = 99
+        const left = 411.453
+        const scale = 3
+        const delayTime = 0
+        const video_height = 1080
+
+        const data0 = [
+            "box1",
+            "box2",
+            "box3",
+            "box4",
+            "box5",
+            "Five",
+            "Six",
+            "Seven",
+            "Impossible.",
+            // "No one can get",
+            // "throught the Great Wall.",
+            // "no way",
+            // "no can do",
+            // "it wont fit",
+            // "stop it",
+            // "get some help"
+        ]
+
+        const data = data0.map((text, ndx) => {
+            let line = data0.length - ndx - 1
+            line = line_top - line * line_height
+            return { top: 500 + ndx*(40), text: text, width : 1066 }
+        });
+
+        // const data = [
+        //   { top: 790.204, width: 517.203, text: "box1" },
+        //   { top: 800.204, width: 653.438, text: "box2" },
+        //     { top: 830.204, width: 417.203, text: "box3" },
+        //     { top: 890.204, width: 1066.16, text: "box4" },
+        // ]
+
+        let log = console.log.bind(console)
+        let delta = (data[1].top - data[0].top)*100/video_height
+        ////log(delta)
+        for (let block of data) {
+            ////log(block.top * 100 / video_height)
+        }
+
+        let within = (low, high, test) => (low <= test && high >= test)
+        let overlap = (id1, id2) => {
+            const top1 = data[id1].top
+            const top2 = data[id2].top
+
+            const bottom1 = top1 + height
+            const bottom2 = top2 + height
+
+            return within(top1, bottom1, top2) || within(top1, bottom1, bottom2)
+        }
+
+        let move = async () => {
+            var start = performance.now()
+            var iter = 0
+            do {
+              ++iter
+              var error = 0.0
+              for (let block of data) {
+                  block.down = 0
+                  block.up = 0
+              }
+
+              for (let i = 0; i < data.length; ++i) {
+                  for (let j = i + 1; j < data.length; ++j) {
+                      if (!overlap(i, j))
+                          continue;
+
+                      let diff;
+                      if(data[i].top <= data[j].top) {
+                        //log('^#box' + (i+1) + ' V#box' + (j+1))
+                        diff = Math.abs(data[j].top - (data[i].top + height))
+                        data[i].up = Math.min(data[i].up, -diff*0.5)
+                        data[j].down = Math.max(data[j].down, diff*0.5)
+                      } else {
+                        //log('V#box' + (i+1) + ' ^#box' + (j+1))
+                        diff = Math.abs(data[i].top - (data[j].top + height))
+                        data[i].down = Math.max(diff*0.5, data[i].down)
+                        data[j].up = Math.min(-diff*0.5, data[j].up)
+                      }
+                      error += Math.abs(diff)
+                      //log('#box' + (i+1) + ' <-> #box' + (j+1) + ', ' + Math.abs(diff)*0.5)
+                  }
+              }
+
+              for (let i =0; i < data.length; ++i) {
+                  let block = data[i]
+                  let staticBlock = "-"
+                  let pos;
+                  if (block.id !== staticBlock) {
+                    pos = block.top + block.up + block.down
+                    if (pos < 0){
+                        //log(`${block.id} could not move to ${pos}`)
+                        pos = 0
+                    }
+                    if (pos + height > video_height){
+                        pos = video_height - height
+                        //log(`${block.id} could not move to ${pos}`)
+                    }
+                    block.top = pos
+                  }
+              }
+            // log("error: ", error)
+            // for (let block of data) {
+            //     let $dst = $(block.id)
+            //     show_cue($dst)
+            // }
+            // await delay(delayTime)
+            // await waitForStep()
+          } while(error > 1 && iter < 500)
+          log("time elapsed:", performance.now() - start)
+          log("iter:", iter)
+          log("error:", error)
+          for (let block of data) {
+              let $dst = $(block.id)
+              show_cue($dst)
+          }
+
+        }
+
+        show_cue_ex = ($cue, left, top, width, height) => {
+            $cue.css("left", (left / scale) + "px")
+            $cue.css("top", (top / scale) + "px")
+            $cue.css("width", (width / scale) + "px")
+            $cue.css("height", (height / scale) + "px")
+        }
+
+        show_cue = ($cue) => {
+            let block = data[$cue.attr("data-id")]
+            show_cue_ex($cue, left, block.top, block.width, height)
+        }
+
+        window.onload=() => {
+            let id = 0
+            let $video = $(".video")
+            for (let block of data) {
+                let $cue = $("<div class='cue'>")
+                $cue.attr("data-id", id)
+                id += 1
+                block['id'] = "#box" + id
+                $cue.attr("id", "box" + id)
+                $cue.text(block.text)
+                $video.append($cue)
+            }
+            for (let block of data) {
+                let $cue = $(block.id)
+                show_cue($cue)
+            }
+            // setTimeout(()=>{
+            //     ////log("0: Pull everything into the video")
+            //     $("#counter").text(0)
+            //     // $("#box4").removeClass('inactive')
+            //     $("#box4").addClass('error')
+            //     setTimeout(() => {
+            //         // data[3].top = video_height - height
+            //         // show_cue($("#box4"))
+            //         setTimeout(() => {
+            //             $("#box4").removeClass("error")
+            //             // $("#box4").addClass("inactive")
+            //             setTimeout(() => {
+            //                 ////log("1+: Find all overlying groups")
+            //                 // move()
+            //             }, delay)
+            //         }, delay)
+            //     }, delay)
+            // }, delay)
+            window.step = 0
+            // next_step();
+        }
+    </script>
+</html>

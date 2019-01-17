@@ -1,0 +1,432 @@
+<html>
+    <meta charset="UTF-8">
+    <script
+        src="https://code.jquery.com/jquery-3.3.1.min.js"
+        integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+        crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --scale: 3;
+            --video-width: 1920px;
+            --video-height: 1080px;
+            --height: 99px;
+            --exceeding-count: 1;
+            --font-size: 62px;
+            --stripe-color: rgba(255,0,0,.1);
+            --stripes: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                var(--stripe-color) 10px,
+                var(--stripe-color) 20px
+            );
+        }
+        .video {
+            width: calc(var(--video-width) / var(--scale));
+            height: calc(var(--video-height) / var(--scale));
+            box-sizing: content-box;
+            border: solid 1px black;
+            background: rgba(0,0,0,.2);
+            position: relative;
+        }
+        .cue {
+            position: absolute;
+            box-sizing: border-box;
+            border: solid 1px blue;
+            font-size: calc(var(--font-size) / var(--scale));
+            padding: 0 calc(10px / var(--scale));
+            color: rgb(48, 48, 48);
+            background: rgb(255, 255, 255);
+            border-radius: 3px;
+            opacity: .85;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .immovable {
+            position: absolute;
+            box-sizing: border-box;
+            border: solid 1px blue;
+            font-size: calc(var(--font-size) / var(--scale));
+            padding: 0 calc(10px / var(--scale));
+            color: firebrick;
+            border-color: coral;
+            --stripe-color: rgba(255,255,255,.1);
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                var(--stripe-color) 10px,
+                var(--stripe-color) 20px
+            ), rgb(255,165,0)
+        }
+
+        .cue.snap-to-line {
+            color: sienna;
+        }
+        .cue.inactive {
+            opacity: 0.3;
+        }
+        .cue.error {
+            border-color: rgba(255, 0, 0);
+            color: rgba(96, 0, 0);
+            background: var(--stripes), white
+        }
+        .cue.moving {
+            border-color: rgba(0, 128, 0);
+            color: rgba(0, 96, 0);
+        }
+        .cue.interesting {
+            border-color: rgba(0, 128, 128);
+            color: rgba(0, 192, 96);
+        }
+        .cue.snap-to-line {
+            border-color: coral;
+            background: rgb(255, 165, 0);
+        }
+        .cue.snap-to-line.error {
+            border-color: coral;
+            background: var(--stripes), rgb(255, 165, 0);
+        }
+        .step-active {
+            font-weight: bold;
+        }
+        #content, #parent {
+            position:relative;
+        }
+        #content-parent {
+            position:absolute;
+            bottom: 0;
+        }
+        #parent {
+            width: calc(var(--video-width) / var(--scale));
+            height: calc((var(--video-height) + var(--exceeding-count) * var(--height)) / var(--scale));
+            margin: 0 auto;
+        }
+        #log {
+            height: 10em;
+            overflow: auto;
+        }
+        #counter {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 33px;
+            font-weight: bold;
+            color: white;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 2px;
+            -webkit-text-stroke-color: rgba(255,255,255,.8);
+        }
+        h1 {
+            font-size: 33px;
+            color: black;
+            -webkit-text-fill-color: rgba(0,0,0,0); /* Will override color (regardless of order) */
+            -webkit-text-stroke-width: 1px;
+            -webkit-text-stroke-color: rgba(0,0,0,.7);
+        }
+    </style>
+    <h1>Swiping cues (horizontal)</h1>
+
+    <div id='parent'>
+        <div id='content-parent'>
+            <div id='content'>
+                <div class="video"></div>
+                <div id="counter">...</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const delay = 250
+
+        const scale = 3
+        const height = 99
+        const left = 411.453
+        const video_width = 1920
+        const video_height = 1080
+
+        const line_height = .0524
+        const line_top = 1.0 - line_height
+
+        const data = [
+            "Somewhere over the rainbow",
+            "Way up high",
+            "And the dreams that you dream of",
+            "Once in a lullaby",
+            "-Somewhere over the rainbow",
+            "-^Bluebirds fly",
+            "-And the dreams that you dream of",
+            "-Dreams really do come true",
+            "-^Check",
+            "-^One",
+            "-^Two",
+            "Check",
+            "One",
+            "Two",
+            "^Impossible.",
+            "^No one can get",
+            "throught the Great Wall."
+        ].map((text, ndx, data0) => {
+            let line = data0.length - ndx
+            line = (line_top - line * line_height) * video_height
+            let snap_to_line = text[0] == "^"
+            if (snap_to_line)
+                text = text.substr(1)
+            return { top: line, orig: line, text: text, width : -1066, snap_to_line: snap_to_line }
+        }).filter(d => d.text[0] != "-")
+
+        let immovable = [
+            { top: video_height - 250, left: 50, width: video_width - 100, height: 200, text: "Controls" },
+            { top: 250, left: 100, width: video_width / 2, height: 2*height, text: "Region" }
+        ]
+
+        {
+            const area = video_height - immovable
+                .map(d=>d.height)
+                .reduce((prev, d) => d + prev, 0)
+            const fitting_lines = Math.floor(area / height);
+
+            let sheet = document.styleSheets[0]
+            let rules = {}
+            for (let rule of sheet.rules) {
+                if (rule.selectorText == ":root") {
+                    rules = rule
+                    break
+                }
+            }
+            let style = rules.style || {}
+            if (style.setProperty) {
+                style.setProperty("--scale", scale)
+                style.setProperty("--video-width", `${video_width}px`)
+                style.setProperty("--video-height", `${video_height}px`)
+                style.setProperty("--height", `${height}px`)
+                style.setProperty("--exceeding-count", data.length - fitting_lines)
+                style.setProperty("--font-size", `${height * 62 / 99}px`)
+            }
+        }
+
+        let iter_count = 0
+        let next_iter = () => {
+            ++iter_count
+            console.log("Iter: ${iter_count} ===================================================")
+            $("#counter").text(iter_count)
+        }
+
+        let overlaps = (top1, height1, top2, height2) => {
+            const bottom1 = top1 + height1
+            const bottom2 = top2 + height2
+
+            const top = Math.max(top1, top2)
+            const bottom = Math.min(bottom1, bottom2)
+            return top < bottom
+        }
+
+        let move_by = (id, delta) => {
+            let snap_to_line = (id, dir_hint) => {
+                if (!data[id].snap_to_line)
+                    return
+                let top = data[id].top
+                if (dir_hint < 0) {
+                    top = Math.floor(top / height) * height
+                } else {
+                    top = Math.ceil(top / height) * height
+                }
+                console.log(`snap-to-line #box${id + 1}: ${data[id].top} -> ${top}`)
+                data[id].top = top
+            }
+
+            let overlaps_imm = (id, imm) => {
+                return overlaps(data[id].top, height, immovable[imm].top, immovable[imm].height)
+            }
+
+            data[id].top += delta
+            snap_to_line(id, delta)
+            let crashed = true
+            let counter = 0
+            while (crashed && counter < 2) {
+                ++counter
+                crashed = false
+                for (let imm = 0; imm < immovable.length; ++imm) {
+                    if (!overlaps_imm(id, imm))
+                        continue
+                    crashed = true
+
+                    const obstacle = immovable[imm]
+                    if (delta < 0) {
+                        // moving up
+                        data[id].top = obstacle.top - height
+                    } else if (delta > 0) {
+                        // moving down
+                        data[id].top = obstacle.top + obstacle.height
+                    } else {
+                        if (data[id].top < obstacle.top)
+                            data[id].top = obstacle.top - height
+                        else
+                            data[id].top = obstacle.top + obstacle.height
+                    }
+                    snap_to_line(id, delta)
+
+                    console.log(`${data[id].id} overlaped immovable #${imm} (${delta})`)
+                }
+            }
+
+            show_cue($(data[id].id))
+
+            if (!delta)
+                return;
+
+            console.log(`${data[id].id} moved by ${delta}`)
+
+            if (delta < 0) {
+                // moving up
+                const lowest = data[id].top - height
+                for (let i = 0; i < id; ++i) {
+                    if (lowest >= data[i].top)
+                        continue
+
+                    move_by(i, lowest - data[i].top)
+                }
+                return
+            }
+
+            const highest = data[id].top + height;
+            for (let i = id + 1; i < data.length; ++i) {
+                if (highest <= data[i].top)
+                    continue
+
+                move_by(i, highest - data[i].top)
+            }
+        }
+
+        let move = ndx => {
+            let overlaps_cue = (id1, id2) => {
+                return overlaps(data[id1].top, height, data[id2].top, height)
+            }
+
+            $(".interesting").removeClass("interesting")
+            ndx = ndx || 0
+            next_iter()
+
+            if (ndx == data.length) {
+                console.log('Done!')
+                pull_back(0)
+                return;
+            }
+
+            $(data[ndx].id).addClass("interesting")
+            let wait = false
+            for (let j = ndx + 1; j < data.length; ++j) {
+                if (!overlaps_cue(ndx, j))
+                    continue;
+
+                const top = data[ndx].top + height
+                const delta = top - data[j].top
+                if (!delta)
+                    continue
+
+                wait = true
+                console.log('#box' + (ndx+1) + ' -> #box' + (j+1) + ', ' + delta)
+                move_by(j, delta)
+            }
+
+            if (wait)
+                setTimeout(move.bind(null, ndx + 1), delay)
+            else
+                move(ndx + 1)
+        }
+
+        let initial_move = () => {
+            next_iter()
+
+            for (let i = 0; i < data.length; ++i)
+                move_by(i, 0)
+
+            setTimeout(move, delay)
+        }
+
+        let pull_back = ndx => {
+            $(".moving").removeClass("moving")
+            if (ndx == data.length) {
+                setTimeout(cast_out, 2*delay)
+                return;
+            }
+            let self = data[ndx]
+            let top = self.top
+            if (top < 0)
+                top = 0
+            if (top + height > video_height)
+                top = video_height - height
+            if (top != self.top) {
+                next_iter()
+                $(self.id).addClass("moving")
+
+                const delta = top - self.top
+                console.log(self.id + " pulled into view, " + delta)
+
+                move_by(ndx, delta)
+                setTimeout(pull_back.bind(null, ndx + 1), delay)
+            }
+            else
+                pull_back(ndx + 1)
+        }
+
+        let cast_out = () => {
+            next_iter()
+            for (let i = 0; i < data.length; ++i) {
+                let self = data[i]
+                let top = self.top
+                if (top < 0)
+                    top = 0
+                if (top + height > video_height)
+                    top = video_height - height
+                if (top != self.top) {
+                    let $self = $(self.id)
+                    // self.top = self.orig
+                    show_cue($self)
+                    $self.addClass("error inactive")
+                    console.log(`${self.id} still conflicting. removing/leaving`)
+                }
+            }
+            console.log('Pulled!')
+        }
+
+        show_cue_ex = ($cue, left, top, width, height) => {
+            $cue.css("left", (left / scale) + "px")
+            $cue.css("top", (top / scale) + "px")
+            $cue.css("height", ((height - 5) / scale) + "px")
+            if (width < 0) {
+                $cue.css("width", "auto")
+                $cue.css("max-width", (-width / scale) + "px")
+            } else
+                $cue.css("width", (width / scale) + "px")
+        }
+
+        show_cue = ($cue) => {
+            let block = data[$cue.attr("data-id")]
+            show_cue_ex($cue, left, block.top, block.width, height)
+        }
+
+        window.onload=() => {
+            let id = 0
+            let $video = $(".video")
+            immovable.map(block => {
+                let $div = $("<div class='immovable'>")
+                $div.text(block.text || "")
+                $video.append($div)
+                show_cue_ex($div, block.left, block.top, block.width, block.height)
+            })
+            data.map(block => {
+                let $cue = $("<div class='cue'>")
+                if (block.snap_to_line)
+                    $cue.addClass('snap-to-line')
+                $cue.attr("data-id", id)
+                id += 1
+                block['id'] = "#box" + id
+                $cue.attr("id", "box" + id)
+                $cue.text(block.text)
+                $video.append($cue)
+                show_cue($(block.id))
+            })
+            setTimeout(initial_move, 3*delay)
+        }
+    </script>
+</html>
