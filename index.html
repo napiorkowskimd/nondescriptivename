@@ -35,12 +35,13 @@
       <button id="run" type="button" name="button">Run tests</button>
       <button id="pause" type="button" name="button" disabled>Pause</button>
       <button id="stop" type="button" name="button" disabled>Stop</button>
+      <button id="next" type="button" name="button" disabled>Next</button>
     </div>
     <div>
         <video id="video" width="1280" height="720" controls>
             <source src="VfE_html5.mp4" type="video/mp4" />
             <source src="VfE.webm" type="video/webm"/>
-            <track src="test-webvtt-basic.vtt" kind="subtitles" srclang="en" label="Basic" default />
+            <track src="test-webvtt-basic.vtt" kind="subtitles" srclang="en" label="Basic" />
             <track src="test-webvtt-basic-lower.vtt" kind="subtitles" srclang="en" label="Basic Lower" />
             <track src="test-webvtt-seq.vtt" kind="subtitles" srclang="en" label="Seq" />
             <track src="test-webvtt-overflow.vtt" kind="subtitles" srclang="en" label="Overflow" />
@@ -72,7 +73,6 @@
                     }
                 }
             }
-            let form = document.getElementById("");
             let size = document.getElementById("font-size");
             size.addEventListener('input', onsize.bind(size), false);
             document.getElementById("font-plus").addEventListener('click', () => {
@@ -106,7 +106,19 @@
               for (track of textTracks) {
                 track.mode = "disabled";
               }
-              textTracks[idx].mode = "showing"
+              if (idx >= 0)
+                textTracks[idx].mode = "showing"
+            }
+
+            function getActiveTrackIdx(video) {
+              var counter = 0;
+              for (track of textTracks) {
+                if (track.mode === "showing") {
+                  return counter;
+                }
+                counter++;
+              }
+              return -1;
             }
 
             function createOption(label) {
@@ -139,49 +151,79 @@
             textTracks.onchange = updateSelectionDisplay;
             var stop = false;
             var pause = false;
-            var last_idx = 0;
-            function cycleThrough() {
-              var cycleStep = function(idx) {
-                last_idx = idx
-                if(!stop && !pause) {
-                console.log("track:" + idx)
-                if (idx >= textTracks.length)
-                  return;
-                selectTrackByIdx(video, idx)
-                video.currentTime = 0
-                  setTimeout(() => cycleStep(idx+1), 30000)
-                }
-              }
-              let idx = 0;
-              if (pause) {
-                idx = last_idx
-                last_idx = 0
-                pause = false;
-              }
-              stop = false;
-              cycleStep(idx)
-            }
-            document.getElementById('run').onclick = () => {
+            var timeout = null;
+
+            function setControlsPaused() {
               document.getElementById('stop').disabled = false;
-              document.getElementById('pause').disabled = false;
-              document.getElementById('run').disabled = true;
-              video.play();
-              cycleThrough();
+              document.getElementById('pause').disabled = true;
+              document.getElementById('run').disabled = false;
+              document.getElementById('next').disabled = true;
             }
-            document.getElementById('stop').onclick = () => {
-              stop=true;
-              video.pause();
-              video.currentTime = 0;
+
+            function setControlsStopped() {
               document.getElementById('stop').disabled = true;
               document.getElementById('pause').disabled = true;
               document.getElementById('run').disabled = false;
+              document.getElementById('next').disabled = true;
             }
+
+            function setControlsRunning() {
+              document.getElementById('stop').disabled = false;
+              document.getElementById('pause').disabled = false;
+              document.getElementById('run').disabled = true;
+              document.getElementById('next').disabled = false;
+            }
+
+            var cycleStep = function() {
+              // Cancel call to test
+              if (timeout) {
+                clearTimeout(timeout);
+              }
+              next_test = getActiveTrackIdx(video) + 1
+              if (next_test >= textTracks.length){
+                setControlsStopped()
+                selectTrackByIdx(video, -1)
+                video.currentTime = 0;
+                video.pause()
+                return;
+              }
+
+              selectTrackByIdx(video, next_test)
+              video.currentTime = 0
+              timeout = setTimeout(() => cycleStep(), 15000)
+            }
+
+            document.getElementById('run').onclick = () => {
+              setControlsRunning()
+              var idx = getActiveTrackIdx(video)
+              if (idx > -1) {
+                idx--;
+              }
+              selectTrackByIdx(video, idx)
+              video.play();
+              cycleStep();
+            }
+
+            document.getElementById('stop').onclick = () => {
+              setControlsStopped()
+              if (timeout) {
+                clearTimeout(timeout);
+              }
+              selectTrackByIdx(video, -1)
+              video.pause();
+              video.currentTime = 0;
+            }
+
             document.getElementById('pause').onclick = () =>{
-               pause=true;
-               video.pause();
-               document.getElementById('stop').disabled = false;
-               document.getElementById('pause').disabled = true;
-               document.getElementById('run').disabled = false;
+              setControlsPaused()
+              if (timeout) {
+                clearTimeout(timeout);
+              }
+              video.pause();
+           }
+
+           document.getElementById('next').onclick = () =>{
+              cycleStep()
            }
         })()
     </script>
