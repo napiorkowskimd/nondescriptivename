@@ -1,5 +1,10 @@
 WEBVTT
 
+STYLE
+::cue {
+    font-size: 84px;
+}
+
 00:01.000 --> 01:00.000 position:21.43% align:start line:95% size:20.8438
 <c.white><c.mono_sans>Impossible.</c.mono_sans></c.white>
 

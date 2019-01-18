@@ -1,5 +1,10 @@
 WEBVTT
 
+STYLE
+::cue {
+    font-size: 84px;
+}
+
 00:01.000 --> 00:15.000 position:21.43% align:start line:10% size:20.8438
 <c.white><c.mono_sans>Ni</c.mono_sans></c.white>
 

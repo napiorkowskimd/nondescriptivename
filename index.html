@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <style>
         ::cue {
-            font-size: 84px;
+            font-size: 76px;
         }
+
         #font-size {
             width: 5em;
             text-align: right;
         }
+
         .note {
             font-size: 0.8em;
             color: gray;
@@ -18,7 +20,22 @@
     </style>
   </head>
   <body>
-    <pre><label for="font-size">::cue { font-size: <input id="font-size" type="number" min="6" max="250" required /> px } <span class="note">(from 6px to 250px)</span></label></pre>
+    <div style="padding:10px">
+      <label for="font-size">::cue { font-size:
+         <input id="font-size" type="number" min="6" max="250" required />
+         <button id="font-minus" type="button" name="minus">-</button>
+         <button id="font-plus" type="button" name="plus">+</button> px }
+         <span class="note"> (from 6px to 250px)</span>
+      </label>
+      <label for="text-track">
+        <select id="tt">
+          <option value="None">None</option>
+        </select>
+      </label>
+      <button id="run" type="button" name="button">Run tests</button>
+      <button id="pause" type="button" name="button" disabled>Pause</button>
+      <button id="stop" type="button" name="button" disabled>Stop</button>
+    </div>
     <div>
         <video id="video" width="1280" height="720" controls>
             <source src="VfE_html5.mp4" type="video/mp4" />
@@ -30,27 +47,44 @@
             <track src="test-webvtt-overflow-seq.vtt" kind="subtitles" srclang="en" label="Overflow Seq" />
             <track src="test-webvtt-overflow-seq-with-first-high.vtt" kind="subtitles" srclang="en" label="Overflow Seq First High" />
             <track src="test-webvtt-overflow-seq-with-first-high-remove.vtt" kind="subtitles" srclang="en" label="Overflow Seq First High Remove" />
-            <track src="test-webvtt-with-snap-to-lines.vtt" kind="subtitles" srclang="en" label="Snap" />
-            <track src="test-webvtt-basic-vertical.vtt" kind="subtitles" srclang="en" label="Vertical" />
-            <track src="test-webvtt-basic-vertical-mixed.vtt" kind="subtitles" srclang="en" label="Vertical Mixed" />
-            <track src="test-webvtt-basic-vertical-mixed-overlapping.vtt" kind="subtitles" srclang="en" label="Vertical (Not)Overlapping" />
-            <track src="test-webvtt-basic-vertical-mixed-overlapping-seq.vtt" kind="subtitles" srclang="en" label="Vertical (Not)Overlapping Seq" />
+            <track src="test-webvtt-snap-1.vtt" kind="subtitles" srclang="en" label="Snap 1" />
+            <track src="test-webvtt-vertical-rl.vtt" kind="subtitles" srclang="en" label="Vertical rl" />
+            <track src="test-webvtt-vertical-rl-mixed.vtt" kind="subtitles" srclang="en" label="Vertical rl Mixed" />
+            <track src="test-webvtt-vertical-rl-mixed-overlapping.vtt" kind="subtitles" srclang="en" label="Vertical rl (Not)Overlapping" />
+            <track src="test-webvtt-vertical-rl-mixed-overlapping-seq.vtt" kind="subtitles" srclang="en" label="Vertical rl (Not)Overlapping Seq" />
+            <track src="test-webvtt-basic-regions.vtt" kind="subtitles" srclang="en" label="Basic Regions" />
+            <track src="test-webvtt-basic-regions-as-obstacle.vtt" kind="subtitles" srclang="en" label="Regions Obstacle" />
         </video>
     </div>
     <script>
-        function onsize() {
-            let sheet = document.styleSheets[0];
-            for (let rule of sheet.rules) {
-                if (rule.selectorText == "::cue") {
-                    rule.style.fontSize = this.value + "px";
-                    break;
+        (function() {
+          var fontSize = 76;
+            var fontSizeChooser = document.getElementById("font-size");
+            fontSizeChooser.value = 76;
+            function onsize() {
+                if (fontSizeChooser.value)
+                  fontSize = parseInt(fontSizeChooser.value)
+                let sheet = document.styleSheets[0];
+                for (let rule of sheet.rules) {
+                    if (rule.selectorText == "::cue") {
+                        rule.style.fontSize = fontSize + "px";
+                        break;
+                    }
                 }
             }
-        }
-        window.onload = function() {
             let form = document.getElementById("");
             let size = document.getElementById("font-size");
             size.addEventListener('input', onsize.bind(size), false);
+            document.getElementById("font-plus").addEventListener('click', () => {
+              fontSize = parseInt(fontSize) + 1;
+              fontSizeChooser.value = fontSize
+              onsize();
+            })
+            document.getElementById("font-minus").addEventListener('click', () => {
+              fontSize = parseInt(fontSize) - 1;
+              fontSizeChooser.value = fontSize
+              onsize();
+            })
             size.value = 6;
             size.update = function (val) {
                 this.value = val
@@ -65,7 +99,91 @@
                     break;
                 }
             }
-        }
+
+            var video = document.getElementById('video')
+            var textTracks = video.textTracks
+            function selectTrackByIdx(video, idx) {
+              for (track of textTracks) {
+                track.mode = "disabled";
+              }
+              textTracks[idx].mode = "showing"
+            }
+
+            function createOption(label) {
+              var option = document.createElement("option")
+              option.value = label
+              option.innerHTML = label;
+              return option;
+            }
+
+            var trackSelector = document.getElementById("tt");
+            for (track of textTracks) {
+              trackSelector.appendChild(createOption(track.label))
+            }
+
+            trackSelector.onchange = function() {
+              if (this.selectedIndex > 0) {
+                selectTrackByIdx(video, this.selectedIndex-1);
+              }
+            }
+
+            function updateSelectionDisplay() {
+              for (var i = 0; i < textTracks.length; i++) {
+                if(textTracks[i].mode === "showing") {
+                  trackSelector.selectedIndex = i + 1;
+                  return;
+                }
+                trackSelector.selectedIndex = 0;
+              }
+            }
+            textTracks.onchange = updateSelectionDisplay;
+            var stop = false;
+            var pause = false;
+            var last_idx = 0;
+            function cycleThrough() {
+              var cycleStep = function(idx) {
+                last_idx = idx
+                if(!stop && !pause) {
+                console.log("track:" + idx)
+                if (idx >= textTracks.length)
+                  return;
+                selectTrackByIdx(video, idx)
+                video.currentTime = 0
+                  setTimeout(() => cycleStep(idx+1), 30000)
+                }
+              }
+              let idx = 0;
+              if (pause) {
+                idx = last_idx
+                last_idx = 0
+                pause = false;
+              }
+              stop = false;
+              cycleStep(idx)
+            }
+            document.getElementById('run').onclick = () => {
+              document.getElementById('stop').disabled = false;
+              document.getElementById('pause').disabled = false;
+              document.getElementById('run').disabled = true;
+              video.play();
+              cycleThrough();
+            }
+            document.getElementById('stop').onclick = () => {
+              stop=true;
+              video.pause();
+              video.currentTime = 0;
+              document.getElementById('stop').disabled = true;
+              document.getElementById('pause').disabled = true;
+              document.getElementById('run').disabled = false;
+            }
+            document.getElementById('pause').onclick = () =>{
+               pause=true;
+               video.pause();
+               document.getElementById('stop').disabled = false;
+               document.getElementById('pause').disabled = true;
+               document.getElementById('run').disabled = false;
+           }
+        })()
     </script>
   </body>
 </html>

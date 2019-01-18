@@ -1,11 +1,16 @@
 WEBVTT
+Region: id=rr width=80% lines=3 regionanchor=0%,100% viewportanchor=10%,50% scroll=up
 
-STYLE
-::cue {
-    font-size: 84px;
-}
+00:00:00.500 --> 01:00.000 region:rr align:left
+first line of region
 
-00:01.000 --> 01:00.000 position:21.43% align:start line:10% size:20.8438
+00:00:00.500 --> 01:00.000 region:rr align:left
+second line of region
+
+00:00:00.500 --> 01:00.000 region:rr align:left
+third line of region
+
+00:01.000 --> 01:00.000 position:21.43% align:start line:68% size:20.8438
 <c.white><c.mono_sans>Ni</c.mono_sans></c.white>
 
 00:02.000 --> 01:00.000 position:21.43% align:start line:70% size:20.8438
